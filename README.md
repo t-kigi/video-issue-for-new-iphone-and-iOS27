@@ -29,6 +29,8 @@ On iOS 27.2, a `<video>` element playing an HLS **master** playlist or a progres
 | When the track is added | before `src`, or right after setting `src` | after `loadedmetadata` |
 | Source | HLS master playlist, progressive MP4 | HLS variant (media) playlist loaded directly |
 
+For progressive MP4, the same workarounds apply (`srclang="und"`, or adding the track after `loadedmetadata`).
+
 Things that did **not** matter: VTT content, `label`, `default` attribute, presence of other tracks,
 video.js vs. native playback, the audio `LANGUAGE` declared in the master playlist, response headers / CSP.
 

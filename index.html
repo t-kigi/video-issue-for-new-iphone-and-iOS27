@@ -38,7 +38,7 @@
 
   <h1 data-i18n="title"></h1>
   <p data-i18n-html="intro"></p>
-  <p data-i18n="howto"></p>
+  <p data-i18n-html="howto"></p>
 
   <table class="matrix" id="matrix"></table>
 
@@ -66,7 +66,7 @@
           'master playlist or a progressive MP4 fails with <code>MEDIA_ERR_SRC_NOT_SUPPORTED</code> (code 4) before any segment is fetched ' +
           'when it has a subtitles/captions <code>&lt;track&gt;</code> whose <code>srclang</code> is English (<code>en</code>, <code>en-GB</code>, <code>eng</code>, ...). ' +
           'See the <a href="' + REPO_URL + '">README</a> for details.',
-        howto: 'Open each case below, then press play. "Expected" is what we observed on affected devices.',
+        howto: 'Open each case below, then press play. <strong>"Expected" is what we observed on affected devices.</strong>',
         current: 'Current case:',
         copy: 'Copy log',
         copied: 'Copied.',
@@ -88,7 +88,7 @@
           '<code>&lt;video&gt;</code> に、<code>srclang</code> が英語 (<code>en</code>, <code>en-GB</code>, <code>eng</code> など) の字幕 / キャプションの ' +
           '<code>&lt;track&gt;</code> があると、セグメントを 1 つも取得しないうちに <code>MEDIA_ERR_SRC_NOT_SUPPORTED</code> (code 4) で失敗します。' +
           '詳細は <a href="' + REPO_URL + '">README</a> を参照してください。',
-        howto: '下のケースを開いて、再生ボタンを押してください。「期待値」は対象端末で観測した結果です。',
+        howto: '下のケースを開いて、再生ボタンを押してください。<strong>「期待値」は対象端末で観測した結果です。</strong>',
         current: '現在のケース:',
         copy: 'ログをコピー',
         copied: 'コピーしました。',
@@ -135,8 +135,8 @@
         ['tracks=en&src=variant', ['en / variant playlist directly', 'en / variant playlist を直接'], 'plays'],
         ['tracks=&src=mp4', ['no track / progressive MP4', '字幕なし / MP4'], 'plays'],
         ['tracks=en&src=mp4', ['en / progressive MP4', 'en / MP4'], 'fails'],
-        ['tracks=en@und&src=mp4', ['en content, srclang=und / progressive MP4', 'en の中身、srclang=und / MP4'], 'untested'],
-        ['tracks=en&src=mp4&timing=late', ['en / progressive MP4 / after loadedmetadata', 'en / MP4 / loadedmetadata 後'], 'untested'],
+        ['tracks=en@und&src=mp4', ['en content, srclang=und / progressive MP4', 'en の中身、srclang=und / MP4'], 'plays'],
+        ['tracks=en&src=mp4&timing=late', ['en / progressive MP4 / after loadedmetadata', 'en / MP4 / loadedmetadata 後'], 'plays'],
       ]],
     ];
 
