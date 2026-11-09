@@ -5,14 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>iOS 27 English Track Repro</title>
   <style>
-    :root { --fg: #222; --bg: #fff; --muted: #666; --line: #ccc; --ok: #1a7f37; --ng: #cf222e; --code: #f4f4f4; }
+    :root { --fg: #222; --bg: #fff; --muted: #666; --line: #ccc; --ok: #1a7f37; --ng: #cf222e; --code: #f4f4f4; --accent: #0969da; }
     @media (prefers-color-scheme: dark) {
-      :root { --fg: #e6e6e6; --bg: #161616; --muted: #9a9a9a; --line: #444; --ok: #3fb950; --ng: #f85149; --code: #262626; }
+      :root { --fg: #e6e6e6; --bg: #161616; --muted: #9a9a9a; --line: #444; --ok: #3fb950; --ng: #f85149; --code: #262626; --accent: #4493f8; }
     }
     body { font-family: -apple-system, system-ui, sans-serif; color: var(--fg); background: var(--bg); max-width: 860px; margin: 0 auto; padding: 16px; line-height: 1.5; }
+    a { color: var(--accent); }
     h1 { font-size: 1.3em; }
     code, pre { background: var(--code); }
     code { padding: 1px 4px; word-break: break-all; }
+    .lang-switch { display: flex; justify-content: flex-end; gap: 4px; }
+    .lang-switch button { font-size: 0.9em; padding: 4px 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 4px; cursor: pointer; }
+    .lang-switch button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
     .matrix { border-collapse: collapse; width: 100%; font-size: 0.9em; margin: 8px 0 16px; }
     .matrix th, .matrix td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
     .matrix a { display: inline-block; margin: 2px 0; }
@@ -23,23 +27,25 @@
     #result.ok { color: var(--ok); }
     #result.ng { color: var(--ng); }
     pre { padding: 8px; font-size: 0.8em; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow: auto; }
-    button { font-size: 1em; padding: 6px 14px; }
+    #copy { font-size: 1em; padding: 6px 14px; }
   </style>
 </head>
 <body>
-  <h1>iOS 27: native HLS fails when an English &lt;track&gt; is present at load</h1>
-  <p>On iOS 27.2 (observed on iPhone 16 / 17, Safari and Chrome for iOS), a <code>&lt;video&gt;</code> playing an HLS
-     master playlist fails with <code>MEDIA_ERR_SRC_NOT_SUPPORTED</code> (code 4) before any segment is fetched
-     when it has a subtitles/captions <code>&lt;track&gt;</code> whose <code>srclang</code> is English (<code>en</code>, <code>en-GB</code>, <code>eng</code>, ...).
-     See the <a href="https://github.com/t-kigi/video-issue-for-new-iphone-and-iOS27">README</a> for details.</p>
-  <p>Open each case below, then press play. "Expected" is what we observed on affected devices.</p>
+  <div class="lang-switch" role="group" aria-label="Language">
+    <button type="button" data-lang="en">English</button>
+    <button type="button" data-lang="ja">日本語</button>
+  </div>
+
+  <h1 data-i18n="title"></h1>
+  <p data-i18n-html="intro"></p>
+  <p data-i18n="howto"></p>
 
   <table class="matrix" id="matrix"></table>
 
-  <p>Current case: <code id="current"></code></p>
+  <p><span data-i18n="current"></span> <code id="current"></code></p>
   <video id="v" controls playsinline preload="auto"></video>
-  <p id="result">Result: loading...</p>
-  <p><button id="copy">Copy log</button> <span id="copy-status"></span></p>
+  <p id="result"></p>
+  <p><button id="copy" data-i18n="copy"></button> <span id="copy-status"></span></p>
   <pre id="log"></pre>
 
   <script>
@@ -48,39 +54,185 @@
     //   kind   : subtitles (default) | captions | descriptions | metadata
     //   timing : before (append <track> before setting src, default) | after-src | late (after loadedmetadata)
     //   src    : master (default) | variant (load the variant playlist directly) | mp4 (progressive MP4)
+    //   lang   : en (default) | ja  -- UI language only
     const SOURCES = { master: 'media/master.m3u8', variant: 'media/v360.m3u8', mp4: 'media/video.mp4' };
     const LABELS = { en: 'English', ja: '日本語' };
+    const REPO_URL = 'https://github.com/t-kigi/video-issue-for-new-iphone-and-iOS27';
 
+    const I18N = {
+      en: {
+        title: 'iOS 27: <video> fails to load when an English <track> is present at load',
+        intro: 'On iOS 27.2 (observed on iPhone 16 / 17, Safari and Chrome for iOS), a <code>&lt;video&gt;</code> playing an HLS ' +
+          'master playlist or a progressive MP4 fails with <code>MEDIA_ERR_SRC_NOT_SUPPORTED</code> (code 4) before any segment is fetched ' +
+          'when it has a subtitles/captions <code>&lt;track&gt;</code> whose <code>srclang</code> is English (<code>en</code>, <code>en-GB</code>, <code>eng</code>, ...). ' +
+          'See the <a href="' + REPO_URL + '">README</a> for details.',
+        howto: 'Open each case below, then press play. "Expected" is what we observed on affected devices.',
+        current: 'Current case:',
+        copy: 'Copy log',
+        copied: 'Copied.',
+        copyFailed: 'Copy failed: select the log manually.',
+        thGroup: 'Group',
+        thCases: 'Cases (expected on affected devices)',
+        expected: 'expected',
+        plays: 'plays',
+        fails: 'FAILS',
+        untested: 'not tested yet',
+        loading: 'Result: loading...',
+        ready: 'Result: ready (press play)',
+        played: 'Result: PLAYED',
+        failed: 'Result: FAILED',
+      },
+      ja: {
+        title: 'iOS 27: 英語の <track> があると <video> が読み込めない',
+        intro: 'iOS 27.2 (iPhone 16 / 17 の Safari と iOS 版 Chrome で確認) で、HLS の master playlist または通常の MP4 を再生する ' +
+          '<code>&lt;video&gt;</code> に、<code>srclang</code> が英語 (<code>en</code>, <code>en-GB</code>, <code>eng</code> など) の字幕 / キャプションの ' +
+          '<code>&lt;track&gt;</code> があると、セグメントを 1 つも取得しないうちに <code>MEDIA_ERR_SRC_NOT_SUPPORTED</code> (code 4) で失敗します。' +
+          '詳細は <a href="' + REPO_URL + '">README</a> を参照してください。',
+        howto: '下のケースを開いて、再生ボタンを押してください。「期待値」は対象端末で観測した結果です。',
+        current: '現在のケース:',
+        copy: 'ログをコピー',
+        copied: 'コピーしました。',
+        copyFailed: 'コピーに失敗しました。ログを手動で選択してください。',
+        thGroup: '分類',
+        thCases: 'ケース (対象端末での期待値)',
+        expected: '期待値',
+        plays: '再生できる',
+        fails: '失敗',
+        untested: '未確認',
+        loading: '結果: 読み込み中...',
+        ready: '結果: 準備完了 (再生ボタンを押してください)',
+        played: '結果: 再生できた',
+        failed: '結果: 失敗',
+      },
+    };
+
+    // [group(en, ja), [[query, label(en, ja), expected]]]
     const MATRIX = [
-      ['Baseline', [
-        ['tracks=', 'no track', 'plays'],
-        ['tracks=ja', 'ja', 'plays'],
-        ['tracks=en', 'en', 'FAILS'],
+      [['Baseline', '基準'], [
+        ['tracks=', ['no track', '字幕なし'], 'plays'],
+        ['tracks=ja', ['ja', 'ja'], 'plays'],
+        ['tracks=en', ['en', 'en'], 'fails'],
       ]],
-      ['srclang', [
-        ['tracks=en@und', 'en content, srclang=und (workaround)', 'plays'],
-        ['tracks=en@ja', 'en content, srclang=ja', 'plays'],
-        ['tracks=ja@en', 'ja content, srclang=en', 'FAILS'],
-        ['tracks=ja@en-GB', 'srclang=en-GB', 'FAILS'],
-        ['tracks=ja@eng', 'srclang=eng', 'FAILS'],
-        ['tracks=ja@fr', 'srclang=fr', 'plays'],
-        ['tracks=ja,en', 'ja + en', 'FAILS'],
+      [['srclang', 'srclang'], [
+        ['tracks=en@und', ['en content, srclang=und (workaround)', 'en の中身、srclang=und (回避策)'], 'plays'],
+        ['tracks=en@ja', ['en content, srclang=ja', 'en の中身、srclang=ja'], 'plays'],
+        ['tracks=ja@en', ['ja content, srclang=en', 'ja の中身、srclang=en'], 'fails'],
+        ['tracks=ja@en-GB', ['srclang=en-GB', 'srclang=en-GB'], 'fails'],
+        ['tracks=ja@eng', ['srclang=eng', 'srclang=eng'], 'fails'],
+        ['tracks=ja@fr', ['srclang=fr', 'srclang=fr'], 'plays'],
+        ['tracks=ja,en', ['ja + en', 'ja + en'], 'fails'],
       ]],
-      ['kind', [
-        ['tracks=en&kind=captions', 'en / captions', 'FAILS'],
-        ['tracks=en&kind=descriptions', 'en / descriptions', 'FAILS'],
-        ['tracks=en&kind=metadata', 'en / metadata', 'plays'],
+      [['kind', 'kind'], [
+        ['tracks=en&kind=captions', ['en / captions', 'en / captions'], 'fails'],
+        ['tracks=en&kind=descriptions', ['en / descriptions', 'en / descriptions'], 'fails'],
+        ['tracks=en&kind=metadata', ['en / metadata', 'en / metadata'], 'plays'],
       ]],
-      ['timing', [
-        ['tracks=en&timing=after-src', 'en / right after src', 'FAILS'],
-        ['tracks=en&timing=late', 'en / after loadedmetadata', 'plays'],
+      [['timing', '追加タイミング'], [
+        ['tracks=en&timing=after-src', ['en / right after src', 'en / src 設定直後'], 'fails'],
+        ['tracks=en&timing=late', ['en / after loadedmetadata', 'en / loadedmetadata 後'], 'plays'],
       ]],
-      ['source', [
-        ['tracks=en&src=variant', 'en / variant playlist directly', 'plays'],
-        ['tracks=&src=mp4', 'no track / progressive MP4', 'plays'],
-        ['tracks=en&src=mp4', 'en / progressive MP4', 'not tested yet'],
+      [['source', 'ソース'], [
+        ['tracks=en&src=variant', ['en / variant playlist directly', 'en / variant playlist を直接'], 'plays'],
+        ['tracks=&src=mp4', ['no track / progressive MP4', '字幕なし / MP4'], 'plays'],
+        ['tracks=en&src=mp4', ['en / progressive MP4', 'en / MP4'], 'fails'],
+        ['tracks=en@und&src=mp4', ['en content, srclang=und / progressive MP4', 'en の中身、srclang=und / MP4'], 'untested'],
+        ['tracks=en&src=mp4&timing=late', ['en / progressive MP4 / after loadedmetadata', 'en / MP4 / loadedmetadata 後'], 'untested'],
       ]],
     ];
+
+    const params = new URLSearchParams(location.search);
+
+    // ---- UI language ----
+    let lang = params.get('lang') === 'ja' ? 'ja' : params.get('lang') === 'en' ? 'en' : null;
+    if (!lang) {
+      try { lang = localStorage.getItem('lang'); } catch (e) { /* storage unavailable */ }
+    }
+    if (lang !== 'ja') lang = 'en';
+    const t = (key) => I18N[lang][key];
+
+    // Test-case query without the UI-only "lang" parameter
+    function caseQuery(search) {
+      const p = new URLSearchParams(search);
+      p.delete('lang');
+      return p.toString();
+    }
+
+    function renderMatrix() {
+      const table = document.getElementById('matrix');
+      table.textContent = '';
+      const current = caseQuery(location.search);
+      const idx = lang === 'ja' ? 1 : 0;
+      const head = table.insertRow();
+      for (const key of ['thGroup', 'thCases']) {
+        const th = document.createElement('th');
+        th.textContent = t(key);
+        head.appendChild(th);
+      }
+      for (const [group, items] of MATRIX) {
+        const tr = table.insertRow();
+        const th = document.createElement('th');
+        th.textContent = group[idx];
+        tr.appendChild(th);
+        const td = tr.insertCell();
+        items.forEach(([query, label, expected], i) => {
+          if (i) td.appendChild(document.createElement('br'));
+          const a = document.createElement('a');
+          a.href = '?' + query + (lang === 'ja' ? '&lang=ja' : '');
+          a.textContent = label[idx];
+          if (caseQuery(query) === current) a.className = 'current';
+          td.appendChild(a);
+          const s = document.createElement('span');
+          s.className = 'exp';
+          s.textContent = ' — ' + t('expected') + ': ' + t(expected);
+          td.appendChild(s);
+        });
+      }
+    }
+
+    // result: { state: 'loading' | 'ready' | 'played' | 'failed', detail }
+    let resultState = { state: 'loading', detail: '' };
+    function renderResult() {
+      const el = document.getElementById('result');
+      el.textContent = t(resultState.state) + (resultState.detail ? ' (' + resultState.detail + ')' : '');
+      el.className = resultState.state === 'played' ? 'ok' : resultState.state === 'failed' ? 'ng' : '';
+    }
+    function setResult(state, detail) {
+      if (resultState.state === 'failed' || (resultState.state === 'played' && state === 'ready')) return;
+      resultState = { state, detail: detail || '' };
+      renderResult();
+    }
+
+    function applyLang() {
+      document.documentElement.lang = lang;
+      document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+      document.querySelectorAll('[data-i18n-html]').forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
+      document.querySelectorAll('.lang-switch button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+      document.getElementById('copy-status').textContent = '';
+      renderMatrix();
+      renderResult();
+    }
+
+    document.querySelectorAll('.lang-switch button').forEach((b) => {
+      b.addEventListener('click', () => {
+        lang = b.dataset.lang;
+        try { localStorage.setItem('lang', lang); } catch (e) { /* storage unavailable */ }
+        const p = new URLSearchParams(location.search);
+        if (lang === 'ja') p.set('lang', 'ja'); else p.delete('lang');
+        const qs = p.toString();
+        history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+        applyLang();
+      });
+    });
+
+    // ---- Test ----
+    const config = {
+      tracks: params.get('tracks') !== null ? params.get('tracks') : 'en',
+      kind: params.get('kind') || 'subtitles',
+      timing: params.get('timing') || 'before',
+      src: SOURCES[params.get('src')] ? params.get('src') : 'master',
+    };
+    document.getElementById('current').textContent = JSON.stringify(config);
+    applyLang();
 
     const T0 = performance.now();
     const logs = [];
@@ -90,41 +242,6 @@
       logs.push(line);
       document.getElementById('log').textContent = logs.join('\n');
     }
-
-    const params = new URLSearchParams(location.search);
-    const config = {
-      tracks: params.get('tracks') !== null ? params.get('tracks') : 'en',
-      kind: params.get('kind') || 'subtitles',
-      timing: params.get('timing') || 'before',
-      src: SOURCES[params.get('src')] ? params.get('src') : 'master',
-    };
-    document.getElementById('current').textContent = JSON.stringify(config);
-
-    (function renderMatrix() {
-      const table = document.getElementById('matrix');
-      const current = location.search.replace(/^\?/, '');
-      const head = table.insertRow();
-      head.innerHTML = '<th>Group</th><th>Cases (expected on affected devices)</th>';
-      for (const [group, items] of MATRIX) {
-        const tr = table.insertRow();
-        const th = document.createElement('th');
-        th.textContent = group;
-        tr.appendChild(th);
-        const td = tr.insertCell();
-        items.forEach(([query, label, expected], i) => {
-          if (i) td.appendChild(document.createElement('br'));
-          const a = document.createElement('a');
-          a.href = '?' + query;
-          a.textContent = label;
-          if (query === current) a.className = 'current';
-          td.appendChild(a);
-          const s = document.createElement('span');
-          s.className = 'exp';
-          s.textContent = ' — expected: ' + expected;
-          td.appendChild(s);
-        });
-      }
-    })();
 
     log('environment', {
       userAgent: navigator.userAgent,
@@ -145,11 +262,10 @@
     } catch (e) { log('PerformanceObserver unavailable', String(e)); }
 
     const video = document.getElementById('v');
-    const result = document.getElementById('result');
     const ERR = { 1: 'MEDIA_ERR_ABORTED', 2: 'MEDIA_ERR_NETWORK', 3: 'MEDIA_ERR_DECODE', 4: 'MEDIA_ERR_SRC_NOT_SUPPORTED' };
 
     function describeTracks() {
-      return Array.from(video.textTracks).map((t) => ({ kind: t.kind, language: t.language, label: t.label, mode: t.mode }));
+      return Array.from(video.textTracks).map((tr) => ({ kind: tr.kind, language: tr.language, label: tr.label, mode: tr.mode }));
     }
 
     const specs = config.tracks.split(',').map((s) => s.trim()).filter(Boolean);
@@ -174,18 +290,12 @@
     for (const ev of ['loadedmetadata', 'playing']) {
       video.addEventListener(ev, () => log('textTracks at ' + ev, describeTracks()));
     }
-    video.addEventListener('canplay', () => {
-      if (!result.classList.contains('ng')) { result.textContent = 'Result: ready (press play)'; }
-    });
-    video.addEventListener('playing', () => {
-      result.textContent = 'Result: PLAYED';
-      result.className = 'ok';
-    }, { once: true });
+    video.addEventListener('canplay', () => setResult('ready'));
+    video.addEventListener('playing', () => setResult('played'));
     video.addEventListener('error', () => {
       const e = video.error;
       log('video.error', { code: e && e.code, name: e && ERR[e.code], message: e && e.message, networkState: video.networkState, textTracks: describeTracks() });
-      result.textContent = 'Result: FAILED (' + (e ? e.code + ' ' + ERR[e.code] : 'unknown') + ')';
-      result.className = 'ng';
+      setResult('failed', e ? e.code + ' ' + ERR[e.code] : 'unknown');
     });
 
     if (config.timing === 'before') addTracks('before src');
@@ -199,12 +309,13 @@
 
     document.getElementById('copy').addEventListener('click', async () => {
       const status = document.getElementById('copy-status');
-      const text = 'URL: ' + location.href + '\n' + result.textContent + '\n' + logs.join('\n');
+      const resultText = resultState.state.toUpperCase() + (resultState.detail ? ' (' + resultState.detail + ')' : '');
+      const text = 'URL: ' + location.href + '\nResult: ' + resultText + '\n' + logs.join('\n');
       try {
         await navigator.clipboard.writeText(text);
-        status.textContent = 'Copied.';
+        status.textContent = t('copied');
       } catch (e) {
-        status.textContent = 'Copy failed: select the log manually.';
+        status.textContent = t('copyFailed');
       }
     });
   </script>

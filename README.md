@@ -1,10 +1,13 @@
-# iOS 27: native HLS fails when an English `<track>` is present at load
+# iOS 27: `<video>` fails to load when an English `<track>` is present at load
 
-Live repro: https://t-kigi.github.io/video-issue-for-new-iphone-and-iOS27/
+**▶ Live repro (GitHub Pages): https://t-kigi.github.io/video-issue-for-new-iphone-and-iOS27/**
+([日本語](https://t-kigi.github.io/video-issue-for-new-iphone-and-iOS27/?lang=ja))
+
+Open it on an affected iPhone and try each case; the page shows PLAYED / FAILED and a copyable log.
 
 ## Summary
 
-On iOS 27.2, a `<video>` element playing an HLS **master** playlist fails immediately with
+On iOS 27.2, a `<video>` element playing an HLS **master** playlist or a progressive MP4 fails immediately with
 `MediaError` code 4 (`MEDIA_ERR_SRC_NOT_SUPPORTED`) when it contains a `<track>` element whose
 `srclang` is English. No media segment or VTT is requested before the error.
 
@@ -24,9 +27,7 @@ On iOS 27.2, a `<video>` element playing an HLS **master** playlist fails immedi
 | `srclang` | `en`, `en-GB`, `en-JP`, `eng`, `EN` | `ja`, `fr`, `de`, `zz`, `und`, empty |
 | `kind` | `subtitles`, `captions`, `descriptions` | `metadata` |
 | When the track is added | before `src`, or right after setting `src` | after `loadedmetadata` |
-| Source | master playlist | variant (media) playlist loaded directly |
-
-Progressive MP4 (`src=mp4` in the test page) has not been tested yet.
+| Source | HLS master playlist, progressive MP4 | HLS variant (media) playlist loaded directly |
 
 Things that did **not** matter: VTT content, `label`, `default` attribute, presence of other tracks,
 video.js vs. native playback, the audio `LANGUAGE` declared in the master playlist, response headers / CSP.
