@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iOS 27 English Track Repro</title>
+  <style>
+    :root { --fg: #222; --bg: #fff; --muted: #666; --line: #ccc; --ok: #1a7f37; --ng: #cf222e; --code: #f4f4f4; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fg: #e6e6e6; --bg: #161616; --muted: #9a9a9a; --line: #444; --ok: #3fb950; --ng: #f85149; --code: #262626; }
+    }
+    body { font-family: -apple-system, system-ui, sans-serif; color: var(--fg); background: var(--bg); max-width: 860px; margin: 0 auto; padding: 16px; line-height: 1.5; }
+    h1 { font-size: 1.3em; }
+    code, pre { background: var(--code); }
+    code { padding: 1px 4px; word-break: break-all; }
+    .matrix { border-collapse: collapse; width: 100%; font-size: 0.9em; margin: 8px 0 16px; }
+    .matrix th, .matrix td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+    .matrix a { display: inline-block; margin: 2px 0; }
+    .matrix a.current { font-weight: bold; }
+    .exp { color: var(--muted); font-size: 0.85em; }
+    video { width: 100%; aspect-ratio: 16 / 9; background: #000; }
+    #result { font-weight: bold; font-size: 1.1em; }
+    #result.ok { color: var(--ok); }
+    #result.ng { color: var(--ng); }
+    pre { padding: 8px; font-size: 0.8em; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow: auto; }
+    button { font-size: 1em; padding: 6px 14px; }
+  </style>
+</head>
+<body>
+  <h1>iOS 27: native HLS fails when an English &lt;track&gt; is present at load</h1>
+  <p>On iOS 27.2 (observed on iPhone 16 / 17, Safari and Chrome for iOS), a <code>&lt;video&gt;</code> playing an HLS
+     master playlist fails with <code>MEDIA_ERR_SRC_NOT_SUPPORTED</code> (code 4) before any segment is fetched
+     when it has a subtitles/captions <code>&lt;track&gt;</code> whose <code>srclang</code> is English (<code>en</code>, <code>en-GB</code>, <code>eng</code>, ...).
+     See the <a href="https://github.com/t-kigi/video-issue-for-new-iphone-and-iOS27">README</a> for details.</p>
+  <p>Open each case below, then press play. "Expected" is what we observed on affected devices.</p>
+
+  <table class="matrix" id="matrix"></table>
+
+  <p>Current case: <code id="current"></code></p>
+  <video id="v" controls playsinline preload="auto"></video>
+  <p id="result">Result: loading...</p>
+  <p><button id="copy">Copy log</button> <span id="copy-status"></span></p>
+  <pre id="log"></pre>
+
+  <script>
+    // Query parameters:
+    //   tracks : comma separated "file[@srclang]" (file = en | ja). Default "en". Empty = no track.
+    //   kind   : subtitles (default) | captions | descriptions | metadata
+    //   timing : before (append <track> before setting src, default) | after-src | late (after loadedmetadata)
+    //   src    : master (default) | variant (load the variant playlist directly) | mp4 (progressive MP4)
+    const SOURCES = { master: 'media/master.m3u8', variant: 'media/v360.m3u8', mp4: 'media/video.mp4' };
+    const LABELS = { en: 'English', ja: '日本語' };
+
+    const MATRIX = [
+      ['Baseline', [
+        ['tracks=', 'no track', 'plays'],
+        ['tracks=ja', 'ja', 'plays'],
+        ['tracks=en', 'en', 'FAILS'],
+      ]],
+      ['srclang', [
+        ['tracks=en@und', 'en content, srclang=und (workaround)', 'plays'],
+        ['tracks=en@ja', 'en content, srclang=ja', 'plays'],
+        ['tracks=ja@en', 'ja content, srclang=en', 'FAILS'],
+        ['tracks=ja@en-GB', 'srclang=en-GB', 'FAILS'],
+        ['tracks=ja@eng', 'srclang=eng', 'FAILS'],
+        ['tracks=ja@fr', 'srclang=fr', 'plays'],
+        ['tracks=ja,en', 'ja + en', 'FAILS'],
+      ]],
+      ['kind', [
+        ['tracks=en&kind=captions', 'en / captions', 'FAILS'],
+        ['tracks=en&kind=descriptions', 'en / descriptions', 'FAILS'],
+        ['tracks=en&kind=metadata', 'en / metadata', 'plays'],
+      ]],
+      ['timing', [
+        ['tracks=en&timing=after-src', 'en / right after src', 'FAILS'],
+        ['tracks=en&timing=late', 'en / after loadedmetadata', 'plays'],
+      ]],
+      ['source', [
+        ['tracks=en&src=variant', 'en / variant playlist directly', 'plays'],
+        ['tracks=&src=mp4', 'no track / progressive MP4', 'plays'],
+        ['tracks=en&src=mp4', 'en / progressive MP4', 'not tested yet'],
+      ]],
+    ];
+
+    const T0 = performance.now();
+    const logs = [];
+    function log(label, data) {
+      const line = '[' + ((performance.now() - T0) / 1000).toFixed(3) + 's] ' + label +
+        (data === undefined ? '' : ' ' + JSON.stringify(data));
+      logs.push(line);
+      document.getElementById('log').textContent = logs.join('\n');
+    }
+
+    const params = new URLSearchParams(location.search);
+    const config = {
+      tracks: params.get('tracks') !== null ? params.get('tracks') : 'en',
+      kind: params.get('kind') || 'subtitles',
+      timing: params.get('timing') || 'before',
+      src: SOURCES[params.get('src')] ? params.get('src') : 'master',
+    };
+    document.getElementById('current').textContent = JSON.stringify(config);
+
+    (function renderMatrix() {
+      const table = document.getElementById('matrix');
+      const current = location.search.replace(/^\?/, '');
+      const head = table.insertRow();
+      head.innerHTML = '<th>Group</th><th>Cases (expected on affected devices)</th>';
+      for (const [group, items] of MATRIX) {
+        const tr = table.insertRow();
+        const th = document.createElement('th');
+        th.textContent = group;
+        tr.appendChild(th);
+        const td = tr.insertCell();
+        items.forEach(([query, label, expected], i) => {
+          if (i) td.appendChild(document.createElement('br'));
+          const a = document.createElement('a');
+          a.href = '?' + query;
+          a.textContent = label;
+          if (query === current) a.className = 'current';
+          td.appendChild(a);
+          const s = document.createElement('span');
+          s.className = 'exp';
+          s.textContent = ' — expected: ' + expected;
+          td.appendChild(s);
+        });
+      }
+    })();
+
+    log('environment', {
+      userAgent: navigator.userAgent,
+      languages: navigator.languages,
+      platform: navigator.platform,
+      maxTouchPoints: navigator.maxTouchPoints,
+      screen: screen.width + 'x' + screen.height + '@' + devicePixelRatio,
+      canPlayHLS: document.createElement('video').canPlayType('application/vnd.apple.mpegurl'),
+    });
+
+    // Network requests (shows that no .ts / .vtt is fetched in the failing cases)
+    try {
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          log('resource', { name: e.name.replace(location.origin, ''), duration: Math.round(e.duration), status: e.responseStatus });
+        }
+      }).observe({ type: 'resource', buffered: true });
+    } catch (e) { log('PerformanceObserver unavailable', String(e)); }
+
+    const video = document.getElementById('v');
+    const result = document.getElementById('result');
+    const ERR = { 1: 'MEDIA_ERR_ABORTED', 2: 'MEDIA_ERR_NETWORK', 3: 'MEDIA_ERR_DECODE', 4: 'MEDIA_ERR_SRC_NOT_SUPPORTED' };
+
+    function describeTracks() {
+      return Array.from(video.textTracks).map((t) => ({ kind: t.kind, language: t.language, label: t.label, mode: t.mode }));
+    }
+
+    const specs = config.tracks.split(',').map((s) => s.trim()).filter(Boolean);
+    function addTracks(when) {
+      const added = specs.map((spec) => {
+        const [file, srclang] = spec.split('@');
+        const name = LABELS[file] ? file : 'en';
+        const track = document.createElement('track');
+        track.kind = config.kind;
+        track.src = 'subs/' + name + '.vtt';
+        track.label = LABELS[name];
+        track.srclang = srclang !== undefined ? srclang : name;
+        video.appendChild(track);
+        return { src: track.getAttribute('src'), srclang: track.srclang, kind: track.kind, label: track.label };
+      });
+      log('tracks added (' + when + ')', added);
+    }
+
+    for (const ev of ['loadstart', 'loadedmetadata', 'loadeddata', 'canplay', 'play', 'playing', 'waiting', 'stalled', 'abort', 'emptied']) {
+      video.addEventListener(ev, () => log('video.' + ev, { t: video.currentTime, readyState: video.readyState }));
+    }
+    for (const ev of ['loadedmetadata', 'playing']) {
+      video.addEventListener(ev, () => log('textTracks at ' + ev, describeTracks()));
+    }
+    video.addEventListener('canplay', () => {
+      if (!result.classList.contains('ng')) { result.textContent = 'Result: ready (press play)'; }
+    });
+    video.addEventListener('playing', () => {
+      result.textContent = 'Result: PLAYED';
+      result.className = 'ok';
+    }, { once: true });
+    video.addEventListener('error', () => {
+      const e = video.error;
+      log('video.error', { code: e && e.code, name: e && ERR[e.code], message: e && e.message, networkState: video.networkState, textTracks: describeTracks() });
+      result.textContent = 'Result: FAILED (' + (e ? e.code + ' ' + ERR[e.code] : 'unknown') + ')';
+      result.className = 'ng';
+    });
+
+    if (config.timing === 'before') addTracks('before src');
+    if (config.timing === 'late') {
+      video.addEventListener('loadedmetadata', () => addTracks('after loadedmetadata'), { once: true });
+    }
+    video.src = SOURCES[config.src];
+    log('src set', video.getAttribute('src'));
+    if (config.timing === 'after-src') addTracks('after src');
+    video.load();
+
+    document.getElementById('copy').addEventListener('click', async () => {
+      const status = document.getElementById('copy-status');
+      const text = 'URL: ' + location.href + '\n' + result.textContent + '\n' + logs.join('\n');
+      try {
+        await navigator.clipboard.writeText(text);
+        status.textContent = 'Copied.';
+      } catch (e) {
+        status.textContent = 'Copy failed: select the log manually.';
+      }
+    });
+  </script>
+</body>
+</html>
